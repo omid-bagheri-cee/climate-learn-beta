@@ -11,7 +11,14 @@ import cdsapi
 from tqdm import tqdm, trange
 
 
-def download_copernicus_era5(dst, variable, year, pressure=False, api_key=None):
+def download_copernicus_era5(dst, variable, period=[1979,2023], domain=[90, -180, -90, 180], pressure=False, api_key=None):
+    # Input validation
+    if not isinstance(period, list) or len(period) != 2 or period[0] > period[1]:
+        raise ValueError("Invalid period. Please provide a list with two elements representing the start and end years.")
+    if not isinstance(domain, list) or len(domain) != 4:
+        raise ValueError("Invalid domain. Please provide a list with four elements representing the northernmost latitude, \
+        westernmost longitude, southernmost latitude, and easternmost longitude.")
+    # Set up logging
     if api_key is not None:
         content = f"url: https://cds.climate.copernicus.eu/api/v2\nkey: {api_key}"
         home_dir = os.environ["HOME"]
@@ -19,21 +26,24 @@ def download_copernicus_era5(dst, variable, year, pressure=False, api_key=None):
             f.write(content)
     os.makedirs(dst, exist_ok=True)
     client = cdsapi.Client()
-    download_args = {
-        "product_type": "reanalysis",
-        "format": "netcdf",
-        "variable": variable,
-        "year": str(year),
-        "month": [str(i).rjust(2, "0") for i in range(1, 13)],
-        "day": [str(i).rjust(2, "0") for i in range(1, 32)],
-        "time": [str(i).rjust(2, "0") + ":00" for i in range(0, 24)],
-    }
-    if pressure:
-        src = "reanalysis-era5-pressure-levels"
-        download_args["pressure_level"] = [1000, 850, 500, 50]
-    else:
-        src = "reanalysis-era5-single-levels"
-    client.retrieve(src, download_args, dst / f"{variable}_{year}_0.25deg.nc")
+    for year in range(period[0],period[1]+1):
+        download_args = {
+            "product_type": "reanalysis",
+            "format": "netcdf",
+            "variable": variable,
+            "year": str(year),
+            "month": [str(i).rjust(2, "0") for i in range(1, 13)],
+            "day": [str(i).rjust(2, "0") for i in range(1, 32)],
+            "time": [str(i).rjust(2, "0") + ":00" for i in range(0, 24)],
+            "area": domain
+        }
+        if pressure:
+            src = "reanalysis-era5-pressure-levels"
+            download_args["pressure_level"] = [1000, 850, 500, 50]
+        else:
+            src = "reanalysis-era5-single-levels"
+        file_name = os.path.join(dst, f"{variable}_{year}_0.25deg.nc")
+        client.retrieve(src, download_args, file_name)
 
 
 def download_mpi_esm1_2_hr(dst, variable, years=(1850, 2015)):
